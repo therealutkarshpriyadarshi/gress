@@ -120,7 +120,10 @@ Open Grafana at http://localhost:3000 to see real-time metrics and pricing updat
 - **Stateful Operations**
   - Aggregations: count, sum, avg, min, max
   - Reductions: Custom reduce functions
-  - State backend: RocksDB (planned)
+  - **Persistent State**: RocksDB backend for state > RAM
+  - **TTL Support**: Automatic state expiry (configurable)
+  - **Incremental Checkpoints**: Efficient state snapshots
+  - **Performance**: <10ms P99 latency for state operations
 
 - **Windowing**
   - Tumbling: Fixed non-overlapping windows
