@@ -8,19 +8,21 @@ import (
 	"time"
 
 	"github.com/therealutkarshpriyadarshi/gress/pkg/checkpoint"
+	"github.com/therealutkarshpriyadarshi/gress/pkg/metrics"
 	"github.com/therealutkarshpriyadarshi/gress/pkg/watermark"
 	"go.uber.org/zap"
 )
 
 // Engine is the core stream processing engine
 type Engine struct {
-	logger     *zap.Logger
-	operators  []Operator
-	sources    []Source
-	sinks      []Sink
-	watermarks *watermark.Manager
-	checkpoint *checkpoint.Manager
-	metrics    *StreamMetrics
+	logger           *zap.Logger
+	operators        []Operator
+	sources          []Source
+	sinks            []Sink
+	watermarks       *watermark.Manager
+	checkpoint       *checkpoint.Manager
+	metrics          *StreamMetrics // Legacy metrics struct
+	metricsCollector *metrics.Collector // Prometheus metrics collector
 
 	eventChan      chan *Event
 	watermarkChan  chan *Watermark
@@ -35,25 +37,29 @@ type Engine struct {
 
 // EngineConfig holds configuration for the stream engine
 type EngineConfig struct {
-	BufferSize           int
-	MaxConcurrency       int
-	CheckpointInterval   time.Duration
-	WatermarkInterval    time.Duration
-	MetricsInterval      time.Duration
-	EnableBackpressure   bool
+	BufferSize            int
+	MaxConcurrency        int
+	CheckpointInterval    time.Duration
+	WatermarkInterval     time.Duration
+	MetricsInterval       time.Duration
+	EnableBackpressure    bool
 	BackpressureThreshold float64
+	MetricsAddr           string // Prometheus metrics server address (e.g., ":9091")
+	EnableMetrics         bool   // Enable Prometheus metrics collection
 }
 
 // DefaultEngineConfig returns default configuration
 func DefaultEngineConfig() EngineConfig {
 	return EngineConfig{
-		BufferSize:           10000,
-		MaxConcurrency:       100,
-		CheckpointInterval:   30 * time.Second,
-		WatermarkInterval:    5 * time.Second,
-		MetricsInterval:      10 * time.Second,
-		EnableBackpressure:   true,
+		BufferSize:            10000,
+		MaxConcurrency:        100,
+		CheckpointInterval:    30 * time.Second,
+		WatermarkInterval:     5 * time.Second,
+		MetricsInterval:       10 * time.Second,
+		EnableBackpressure:    true,
 		BackpressureThreshold: 0.8,
+		MetricsAddr:           ":9091",
+		EnableMetrics:         true,
 	}
 }
 
@@ -65,17 +71,24 @@ func NewEngine(config EngineConfig, logger *zap.Logger) *Engine {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create Prometheus metrics collector if enabled
+	var metricsCollector *metrics.Collector
+	if config.EnableMetrics {
+		metricsCollector = metrics.NewCollector(logger)
+	}
+
 	return &Engine{
-		logger:         logger,
-		operators:      make([]Operator, 0),
-		sources:        make([]Source, 0),
-		sinks:          make([]Sink, 0),
-		eventChan:      make(chan *Event, config.BufferSize),
-		watermarkChan:  make(chan *Watermark, 100),
-		checkpointChan: make(chan *Checkpoint, 10),
-		ctx:            ctx,
-		cancel:         cancel,
-		config:         config,
+		logger:           logger,
+		operators:        make([]Operator, 0),
+		sources:          make([]Source, 0),
+		sinks:            make([]Sink, 0),
+		eventChan:        make(chan *Event, config.BufferSize),
+		watermarkChan:    make(chan *Watermark, 100),
+		checkpointChan:   make(chan *Checkpoint, 10),
+		ctx:              ctx,
+		cancel:           cancel,
+		config:           config,
+		metricsCollector: metricsCollector,
 		metrics: &StreamMetrics{
 			EventsProcessed: 0,
 			EventsFiltered:  0,
@@ -91,8 +104,20 @@ func (e *Engine) AddSource(source Source) *Engine {
 }
 
 // AddOperator adds a processing operator
+// If metrics are enabled, the operator is automatically wrapped with instrumentation
 func (e *Engine) AddOperator(op Operator) *Engine {
-	e.operators = append(e.operators, op)
+	if e.config.EnableMetrics && e.metricsCollector != nil {
+		// Auto-instrument the operator
+		operatorName := fmt.Sprintf("operator-%d", len(e.operators))
+		operatorType := fmt.Sprintf("%T", op)
+		instrumentedOp := NewInstrumentedOperator(op, operatorName, operatorType, e.metricsCollector)
+		e.operators = append(e.operators, instrumentedOp)
+		e.logger.Debug("Added instrumented operator",
+			zap.String("name", operatorName),
+			zap.String("type", operatorType))
+	} else {
+		e.operators = append(e.operators, op)
+	}
 	return e
 }
 
@@ -107,7 +132,16 @@ func (e *Engine) Start() error {
 	e.logger.Info("Starting stream processing engine",
 		zap.Int("sources", len(e.sources)),
 		zap.Int("operators", len(e.operators)),
-		zap.Int("sinks", len(e.sinks)))
+		zap.Int("sinks", len(e.sinks)),
+		zap.Bool("metrics_enabled", e.config.EnableMetrics))
+
+	// Start Prometheus metrics server if enabled
+	if e.config.EnableMetrics && e.metricsCollector != nil {
+		metricsServer := metrics.NewServer(e.config.MetricsAddr, e.metricsCollector, e.logger)
+		if err := metricsServer.Start(); err != nil {
+			e.logger.Error("Failed to start metrics server", zap.Error(err))
+		}
+	}
 
 	// Initialize watermark manager
 	e.watermarks = watermark.NewManager(e.config.WatermarkInterval, e.logger)
@@ -157,14 +191,22 @@ func (e *Engine) processingLoop() {
 			return
 
 		case event := <-e.eventChan:
+			// Check backpressure and update buffer utilization metrics
+			bufferUtilization := float64(len(e.eventChan)) / float64(cap(e.eventChan))
+
+			// Update buffer utilization metric
+			if e.metricsCollector != nil {
+				e.metricsCollector.BufferUtilization.Set(bufferUtilization)
+			}
+
 			// Check backpressure
-			if e.config.EnableBackpressure {
-				bufferUtilization := float64(len(e.eventChan)) / float64(cap(e.eventChan))
-				if bufferUtilization > e.config.BackpressureThreshold {
-					atomic.AddInt64(&e.metrics.BackpressureCount, 1)
-					e.logger.Warn("Backpressure detected",
-						zap.Float64("utilization", bufferUtilization))
+			if e.config.EnableBackpressure && bufferUtilization > e.config.BackpressureThreshold {
+				atomic.AddInt64(&e.metrics.BackpressureCount, 1)
+				if e.metricsCollector != nil {
+					e.metricsCollector.BackpressureCount.Inc()
 				}
+				e.logger.Warn("Backpressure detected",
+					zap.Float64("utilization", bufferUtilization))
 			}
 
 			// Acquire semaphore for concurrency control
@@ -189,6 +231,12 @@ func (e *Engine) processingLoop() {
 // processEvent processes a single event through the pipeline
 func (e *Engine) processEvent(event *Event) error {
 	startTime := time.Now()
+
+	// Determine source name for metrics
+	sourceName := "unknown"
+	if len(e.sources) > 0 {
+		sourceName = e.sources[0].Name()
+	}
 
 	ctx := &ProcessingContext{
 		Ctx:       e.ctx,
@@ -224,10 +272,16 @@ func (e *Engine) processEvent(event *Event) error {
 		}
 	}
 
-	// Update metrics
+	// Update legacy metrics
 	atomic.AddInt64(&e.metrics.EventsProcessed, 1)
 	latency := time.Since(startTime)
 	e.updateLatencyMetrics(latency)
+
+	// Update Prometheus metrics
+	if e.metricsCollector != nil {
+		e.metricsCollector.EventsProcessed.WithLabelValues(sourceName).Inc()
+		e.metricsCollector.ProcessingLatency.WithLabelValues(sourceName).Observe(latency.Seconds())
+	}
 
 	return nil
 }
@@ -235,6 +289,12 @@ func (e *Engine) processEvent(event *Event) error {
 // handleWatermark processes a watermark event
 func (e *Engine) handleWatermark(wm *Watermark) {
 	e.metrics.CurrentWatermark = wm.Timestamp
+
+	// Update Prometheus metrics
+	if e.metricsCollector != nil {
+		RecordWatermarkProgress(e.metricsCollector, wm.Timestamp, wm.Partition)
+	}
+
 	e.logger.Debug("Watermark advanced",
 		zap.Time("timestamp", wm.Timestamp),
 		zap.Int32("partition", wm.Partition))
@@ -276,6 +336,7 @@ func (e *Engine) checkpointLoop() {
 
 // createCheckpoint creates a consistent checkpoint
 func (e *Engine) createCheckpoint() error {
+	startTime := time.Now()
 	e.logger.Info("Creating checkpoint")
 
 	checkpoint := &Checkpoint{
@@ -287,7 +348,19 @@ func (e *Engine) createCheckpoint() error {
 	// TODO: Collect state from all operators
 
 	e.metrics.LastCheckpointAt = time.Now()
-	e.logger.Info("Checkpoint created", zap.String("id", checkpoint.ID))
+
+	// Update Prometheus metrics
+	duration := time.Since(startTime)
+	if e.metricsCollector != nil {
+		RecordCheckpointDuration(e.metricsCollector, duration, true)
+		e.metricsCollector.UpdateTimeSinceLastCheckpoint(e.metrics.LastCheckpointAt)
+		// Estimate checkpoint size (will be more accurate when state collection is implemented)
+		e.metricsCollector.CheckpointSize.Set(float64(len(checkpoint.StateData)))
+	}
+
+	e.logger.Info("Checkpoint created",
+		zap.String("id", checkpoint.ID),
+		zap.Duration("duration", duration))
 
 	return nil
 }
@@ -372,4 +445,10 @@ func (e *Engine) GetMetrics() StreamMetrics {
 		LastCheckpointAt:  e.metrics.LastCheckpointAt,
 		BackpressureCount: atomic.LoadInt64(&e.metrics.BackpressureCount),
 	}
+}
+
+// GetMetricsCollector returns the Prometheus metrics collector
+// This allows applications to register custom metrics
+func (e *Engine) GetMetricsCollector() *metrics.Collector {
+	return e.metricsCollector
 }
