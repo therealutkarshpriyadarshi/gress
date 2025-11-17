@@ -1,0 +1,50 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'gress-cluster'
+    environment: 'development'
+
+scrape_configs:
+  # Gress application metrics
+  - job_name: 'gress'
+    static_configs:
+      - targets: ['gress-app:9091']
+        labels:
+          service: 'stream-processing'
+
+  # Kafka JMX metrics
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9101']
+        labels:
+          service: 'kafka'
+
+  # TimescaleDB metrics (via postgres_exporter - optional)
+  - job_name: 'timescaledb'
+    static_configs:
+      - targets: ['timescaledb:9187']
+        labels:
+          service: 'timescaledb'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # NATS metrics
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats:8222']
+        labels:
+          service: 'nats'
+
+# Alerting rules
+rule_files:
+  - 'alerts.yml'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
