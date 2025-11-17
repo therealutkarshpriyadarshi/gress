@@ -1,0 +1,79 @@
+{
+  "dashboard": {
+    "title": "Gress Stream Processing Overview",
+    "tags": ["gress", "stream-processing"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Events Processed (Rate)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(gress_events_processed_total[5m])",
+            "legendFormat": "{{instance}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Processing Latency (P99)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(gress_processing_latency_bucket[5m]))",
+            "legendFormat": "P99"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(gress_processing_latency_bucket[5m]))",
+            "legendFormat": "P95"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Backpressure Events",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(gress_backpressure_total[5m])",
+            "legendFormat": "Backpressure Rate"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Checkpoint Status",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "time() - gress_last_checkpoint_timestamp",
+            "legendFormat": "Time Since Last Checkpoint (s)"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Surge Pricing by Area",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "SELECT area, surge_multiplier FROM pricing_updates ORDER BY time DESC LIMIT 100",
+            "format": "time_series",
+            "datasource": "TimescaleDB"
+          }
+        ]
+      }
+    ],
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}
