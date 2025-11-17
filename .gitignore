@@ -24,11 +24,14 @@ go.work
 *.swo
 *~
 
-# State directories
+# State directories (runtime data, not source code)
 data/
 checkpoints/
 rocksdb/
-state/
+/state/
+state-data/
+examples/**/state/
+examples/**/checkpoints/
 
 # Logs
 *.log

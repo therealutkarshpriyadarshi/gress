@@ -135,10 +135,14 @@
 - **Skew Handling**: Per-partition watermark tracking
 
 ### State Management
-- **RocksDB Backend**: Persistent, embeddable key-value store
-- **Incremental Snapshots**: Only changed state persisted
-- **State TTL**: Automatic cleanup of old state
-- **Queryable State**: External state queries supported
+- **Pluggable Backends**:
+  - **RocksDB**: Persistent state for production (>RAM state size)
+  - **Memory**: In-memory state for development/testing
+- **Incremental Checkpoints**: Only changed state persisted
+- **State TTL**: Automatic cleanup with configurable expiry (1h-24h typical)
+- **Performance**: <10ms P99 latency for Get/Put operations
+- **Snapshot/Restore**: Full state recovery from checkpoints
+- **Configurable**: Fine-tuned buffer sizes, cache, and compaction
 
 ### Backpressure
 - **Token Bucket**: Rate limiting at ingestion
@@ -157,8 +161,10 @@
 
 - **Throughput**: 1M+ events/second per node
 - **Latency**: P99 < 100ms for stateless ops
-- **State Size**: Support for 100GB+ state per node
+- **State Operations**: P99 < 10ms for Get/Put (RocksDB)
+- **State Size**: Support for 100GB+ state per node (persistent backend)
 - **Availability**: 99.9% uptime with proper deployment
+- **Recovery**: < 30s from checkpoint restore
 
 ## Real-World Use Cases
 
