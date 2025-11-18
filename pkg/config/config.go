@@ -176,6 +176,25 @@ type RocksDBConfig struct {
 	WriteBufferSize      int    `yaml:"write_buffer_size" json:"write_buffer_size"`
 	MaxWriteBufferNumber int    `yaml:"max_write_buffer_number" json:"max_write_buffer_number"`
 	BlockCacheSize       int64  `yaml:"block_cache_size" json:"block_cache_size"`
+
+	// Performance preset: low-latency, high-throughput, balanced, large-state
+	// Overrides other settings if specified
+	Preset                    string `yaml:"preset" json:"preset"`
+
+	// Advanced performance tuning
+	MaxBackgroundJobs         int   `yaml:"max_background_jobs" json:"max_background_jobs"`
+	MaxSubCompactions         int   `yaml:"max_sub_compactions" json:"max_sub_compactions"`
+	OptimizeFiltersForHits    bool  `yaml:"optimize_filters_for_hits" json:"optimize_filters_for_hits"`
+	Level0FileNumCompactionTrigger int `yaml:"level0_file_num_compaction_trigger" json:"level0_file_num_compaction_trigger"`
+	TargetFileSizeBase        int64 `yaml:"target_file_size_base" json:"target_file_size_base"`
+	MaxBytesForLevelBase      int64 `yaml:"max_bytes_for_level_base" json:"max_bytes_for_level_base"`
+
+	// Latency optimization
+	AllowMmapReads            bool  `yaml:"allow_mmap_reads" json:"allow_mmap_reads"`
+	UseDirectReads            bool  `yaml:"use_direct_reads" json:"use_direct_reads"`
+
+	// Metrics and monitoring
+	EnableLatencyTracking     bool  `yaml:"enable_latency_tracking" json:"enable_latency_tracking"`
 }
 
 // MetricsConfig holds metrics and monitoring configuration

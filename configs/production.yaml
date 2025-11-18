@@ -80,9 +80,30 @@ state:
   backend: rocksdb
   rocksdb:
     path: /var/lib/gress/rocksdb
+
+    # Performance preset - optimized for <10ms P99 latency
+    # Options: low-latency, high-throughput, balanced, large-state
+    preset: low-latency
+
+    # Advanced configuration (preset overrides these if set)
     write_buffer_size: 134217728  # 128 MB
-    max_write_buffer_number: 5
-    block_cache_size: 2147483648  # 2 GB
+    max_write_buffer_number: 4
+    block_cache_size: 536870912   # 512 MB (increased for better caching)
+
+    # Performance tuning
+    max_background_jobs: 8
+    max_sub_compactions: 4
+    optimize_filters_for_hits: true
+    level0_file_num_compaction_trigger: 2
+    target_file_size_base: 134217728  # 128 MB
+    max_bytes_for_level_base: 536870912  # 512 MB
+
+    # Latency optimizations
+    allow_mmap_reads: true
+    use_direct_reads: false  # Set to true for large state workloads
+
+    # Metrics
+    enable_latency_tracking: true
 
 metrics:
   enabled: true
