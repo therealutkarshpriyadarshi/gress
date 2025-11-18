@@ -40,6 +40,9 @@ type Config struct {
 
 	// Security configuration
 	Security SecurityConfig `yaml:"security" json:"security"`
+
+	// Schema Registry configuration
+	SchemaRegistry SchemaRegistryConfig `yaml:"schema_registry" json:"schema_registry"`
 }
 
 // ApplicationConfig holds application-level metadata
@@ -104,6 +107,10 @@ type KafkaSourceConfig struct {
 	GroupID       string   `yaml:"group_id" json:"group_id"`
 	AutoCommit    bool     `yaml:"auto_commit" json:"auto_commit"`
 	CommitInterval time.Duration `yaml:"commit_interval" json:"commit_interval"`
+
+	// Schema configuration
+	ValueSchema *SourceSchemaConfig `yaml:"value_schema,omitempty" json:"value_schema,omitempty"`
+	KeySchema   *SourceSchemaConfig `yaml:"key_schema,omitempty" json:"key_schema,omitempty"`
 }
 
 // HTTPSourceConfig holds HTTP source configuration
@@ -139,6 +146,10 @@ type KafkaSinkConfig struct {
 	Topic         string   `yaml:"topic" json:"topic"`
 	FlushInterval time.Duration `yaml:"flush_interval" json:"flush_interval"`
 	BatchSize     int      `yaml:"batch_size" json:"batch_size"`
+
+	// Schema configuration
+	ValueSchema *SinkSchemaConfig `yaml:"value_schema,omitempty" json:"value_schema,omitempty"`
+	KeySchema   *SinkSchemaConfig `yaml:"key_schema,omitempty" json:"key_schema,omitempty"`
 }
 
 // TimescaleSinkConfig holds TimescaleDB sink configuration
@@ -189,6 +200,68 @@ type SecurityConfig struct {
 	CAFile          string `yaml:"ca_file" json:"ca_file"`
 	EnableAuth      bool   `yaml:"enable_auth" json:"enable_auth"`
 	AuthType        string `yaml:"auth_type" json:"auth_type"` // none, basic, bearer, mtls
+}
+
+// SchemaRegistryConfig holds schema registry configuration
+type SchemaRegistryConfig struct {
+	// Enabled enables schema registry integration
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// URL is the schema registry URL
+	URL string `yaml:"url" json:"url"`
+
+	// Authentication
+	Username string `yaml:"username,omitempty" json:"username,omitempty"`
+	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+
+	// Timeouts and caching
+	Timeout      time.Duration `yaml:"timeout" json:"timeout"`
+	CacheEnabled bool          `yaml:"cache_enabled" json:"cache_enabled"`
+	CacheSize    int           `yaml:"cache_size" json:"cache_size"`
+	CacheTTL     time.Duration `yaml:"cache_ttl" json:"cache_ttl"`
+
+	// TLS configuration
+	TLSEnabled    bool   `yaml:"tls_enabled" json:"tls_enabled"`
+	TLSCertPath   string `yaml:"tls_cert_path,omitempty" json:"tls_cert_path,omitempty"`
+	TLSKeyPath    string `yaml:"tls_key_path,omitempty" json:"tls_key_path,omitempty"`
+	TLSCAPath     string `yaml:"tls_ca_path,omitempty" json:"tls_ca_path,omitempty"`
+	TLSSkipVerify bool   `yaml:"tls_skip_verify" json:"tls_skip_verify"`
+}
+
+// SourceSchemaConfig holds schema configuration for data sources
+type SourceSchemaConfig struct {
+	// Subject is the schema registry subject name
+	Subject string `yaml:"subject" json:"subject"`
+
+	// SchemaType is the type of schema (AVRO, PROTOBUF, JSON)
+	SchemaType string `yaml:"schema_type" json:"schema_type"`
+
+	// Version is the specific version to use (0 for latest)
+	Version int `yaml:"version" json:"version"`
+
+	// ValidateOnRead validates data on deserialization
+	ValidateOnRead bool `yaml:"validate_on_read" json:"validate_on_read"`
+}
+
+// SinkSchemaConfig holds schema configuration for data sinks
+type SinkSchemaConfig struct {
+	// Subject is the schema registry subject name
+	Subject string `yaml:"subject" json:"subject"`
+
+	// SchemaType is the type of schema (AVRO, PROTOBUF, JSON)
+	SchemaType string `yaml:"schema_type" json:"schema_type"`
+
+	// Version is the specific version to use (0 for latest)
+	Version int `yaml:"version" json:"version"`
+
+	// AutoRegister automatically registers schemas if they don't exist
+	AutoRegister bool `yaml:"auto_register" json:"auto_register"`
+
+	// Compatibility is the compatibility mode for the subject
+	Compatibility string `yaml:"compatibility" json:"compatibility"`
+
+	// ValidateOnWrite validates data on serialization
+	ValidateOnWrite bool `yaml:"validate_on_write" json:"validate_on_write"`
 }
 
 
@@ -265,6 +338,16 @@ func DefaultConfig() *Config {
 			EnableTLS:  false,
 			EnableAuth: false,
 			AuthType:   "none",
+		},
+		SchemaRegistry: SchemaRegistryConfig{
+			Enabled:      false,
+			URL:          "http://localhost:8081",
+			Timeout:      30 * time.Second,
+			CacheEnabled: true,
+			CacheSize:    1000,
+			CacheTTL:     5 * time.Minute,
+			TLSEnabled:   false,
+			TLSSkipVerify: false,
 		},
 	}
 }

@@ -7,7 +7,7 @@ import (
 
 // Event represents a single event in the stream
 type Event struct {
-	Key       string                 // Partition key for routing
+	Key       interface{}            // Partition key for routing (string or schema-decoded object)
 	Value     interface{}            // Event payload
 	EventTime time.Time              // Event-time timestamp
 	Headers   map[string]string      // Metadata headers

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/api-events.schema.json",
+  "title": "API Event",
+  "description": "Schema for API events",
+  "type": "object",
+  "properties": {
+    "request_id": {
+      "description": "Unique identifier for the API request",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "endpoint": {
+      "description": "API endpoint path",
+      "type": "string"
+    },
+    "method": {
+      "description": "HTTP method",
+      "type": "string",
+      "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]
+    },
+    "status_code": {
+      "description": "HTTP status code",
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599
+    },
+    "duration_ms": {
+      "description": "Request duration in milliseconds",
+      "type": "number",
+      "minimum": 0
+    },
+    "timestamp": {
+      "description": "Event timestamp in ISO 8601 format",
+      "type": "string",
+      "format": "date-time"
+    },
+    "user_id": {
+      "description": "User identifier if authenticated",
+      "type": ["string", "null"]
+    },
+    "error": {
+      "description": "Error details if request failed",
+      "type": ["object", "null"],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    },
+    "metadata": {
+      "description": "Additional metadata",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["request_id", "endpoint", "method", "status_code", "timestamp"]
+}

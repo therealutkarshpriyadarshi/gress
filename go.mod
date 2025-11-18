@@ -12,6 +12,9 @@ require (
 	github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c
 	go.uber.org/zap v1.26.0
 	google.golang.org/protobuf v1.31.0
+	github.com/riferrei/srclient v0.5.4
+	github.com/linkedin/goavro/v2 v2.12.0
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 )
 
 require (
