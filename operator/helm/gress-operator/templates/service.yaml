@@ -1,0 +1,18 @@
+{{- if .Values.operator.metrics.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "gress-operator.fullname" . }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "gress-operator.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: {{ .Values.operator.metrics.port }}
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    {{- include "gress-operator.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,43 @@
+apiVersion: gress.io/v1alpha1
+kind: Checkpoint
+metadata:
+  name: kafka-job-savepoint-manual
+  namespace: default
+  labels:
+    streamjob: kafka-processing-job
+    type: savepoint
+    trigger: manual
+spec:
+  # Associated StreamJob
+  streamJobName: kafka-processing-job
+
+  # Type of checkpoint (checkpoint or savepoint)
+  type: savepoint
+
+  # How this checkpoint was triggered
+  triggerMode: manual
+
+  # Storage configuration
+  storage:
+    type: s3
+    path: s3://gress-checkpoints/savepoints
+    s3:
+      bucket: gress-checkpoints
+      prefix: savepoints/kafka-processing-job
+      region: us-east-1
+      credentialsSecret:
+        name: aws-credentials
+
+  # Retention policy
+  retentionPolicy:
+    retainOnJobCompletion: true
+    retainOnJobFailure: true
+    retainOnJobCancellation: true
+    maxCount: 5  # Keep last 5 savepoints
+    maxAge: "7d"  # Delete savepoints older than 7 days
+
+  # Metadata
+  metadata:
+    reason: "Pre-upgrade savepoint"
+    createdBy: "admin"
+    version: "v1.2.3"
