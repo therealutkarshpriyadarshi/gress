@@ -1,0 +1,87 @@
+# Gress Ride-Sharing Use Case Configuration
+# Example configuration for dynamic pricing and demand/supply analysis
+
+version: v1
+
+application:
+  name: rideshare-pricing
+  environment: production
+  tags:
+    use_case: rideshare
+    feature: dynamic_pricing
+
+engine:
+  buffer_size: 20000
+  max_concurrency: 200
+  checkpoint_interval: 30s
+  watermark_interval: 5s
+  metrics_interval: 10s
+  enable_backpressure: true
+  backpressure_threshold: 0.8
+  checkpoint_dir: ./checkpoints
+
+error_handling:
+  strategy: retry-then-dlq
+  enable_retry: true
+  max_retry_attempts: 3
+  initial_backoff: 100ms
+  max_backoff: 30s
+  backoff_multiplier: 2.0
+  backoff_jitter: 0.1
+  enable_dlq: true
+  dlq_max_size: 10000
+  dlq_type: memory
+  enable_circuit_breaker: true
+  circuit_breaker:
+    failure_threshold: 5
+    success_threshold: 2
+    timeout: 60s
+  enable_side_outputs: true
+  side_output_buffer_size: 1000
+
+sources:
+  http:
+    - name: ride-requests
+      address: ":8080"
+      path: /ride-requests
+      tls: false
+
+  websocket:
+    - name: driver-locations
+      address: ":8081"
+      path: /driver-locations
+      tls: false
+
+sinks:
+  kafka:
+    - name: pricing-updates
+      brokers:
+        - localhost:9092
+      topic: pricing-updates
+      flush_interval: 1s
+      batch_size: 100
+
+state:
+  backend: rocksdb
+  rocksdb:
+    path: ./data/rocksdb
+    write_buffer_size: 67108864  # 64 MB
+    max_write_buffer_number: 3
+    block_cache_size: 536870912  # 512 MB
+
+metrics:
+  enabled: true
+  address: ":9091"
+  path: /metrics
+  namespace: gress
+  subsystem: rideshare
+
+logging:
+  level: info
+  format: json
+  output: stdout
+
+security:
+  enable_tls: false
+  enable_auth: false
+  auth_type: none

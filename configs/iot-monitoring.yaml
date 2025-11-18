@@ -1,0 +1,97 @@
+# Gress IoT Monitoring Configuration
+# Example configuration for IoT sensor data processing and anomaly detection
+
+version: v1
+
+application:
+  name: iot-monitoring
+  environment: production
+  tags:
+    use_case: iot
+    feature: anomaly_detection
+
+engine:
+  buffer_size: 100000
+  max_concurrency: 1000
+  checkpoint_interval: 20s
+  watermark_interval: 2s
+  metrics_interval: 10s
+  enable_backpressure: true
+  backpressure_threshold: 0.85
+  checkpoint_dir: /data/checkpoints
+
+error_handling:
+  strategy: retry-then-dlq
+  enable_retry: true
+  max_retry_attempts: 3
+  initial_backoff: 50ms
+  max_backoff: 10s
+  backoff_multiplier: 2.0
+  backoff_jitter: 0.15
+  enable_dlq: true
+  dlq_max_size: 50000
+  dlq_type: file
+  dlq_directory: /data/dlq
+  enable_circuit_breaker: true
+  circuit_breaker:
+    failure_threshold: 10
+    success_threshold: 3
+    timeout: 90s
+  enable_side_outputs: true
+  side_output_buffer_size: 2000
+
+sources:
+  kafka:
+    - name: sensor-data
+      brokers:
+        - kafka-1:9092
+        - kafka-2:9092
+      topics:
+        - sensor-temperature
+        - sensor-pressure
+        - sensor-humidity
+      group_id: iot-monitoring-group
+      auto_commit: true
+      commit_interval: 3s
+
+sinks:
+  timescaledb:
+    - name: sensor-metrics
+      connection_string: "host=timescaledb port=5432 user=iot_user password=$IOT_DB_PASSWORD dbname=iot_metrics sslmode=require"
+      table: sensor_readings
+      batch_size: 1000
+      flush_interval: 3s
+
+    - name: anomalies
+      connection_string: "host=timescaledb port=5432 user=iot_user password=$IOT_DB_PASSWORD dbname=iot_metrics sslmode=require"
+      table: detected_anomalies
+      batch_size: 100
+      flush_interval: 1s
+
+state:
+  backend: rocksdb
+  rocksdb:
+    path: /data/rocksdb
+    write_buffer_size: 134217728  # 128 MB
+    max_write_buffer_number: 5
+    block_cache_size: 1073741824  # 1 GB
+
+metrics:
+  enabled: true
+  address: ":9091"
+  path: /metrics
+  namespace: gress
+  subsystem: iot
+
+logging:
+  level: info
+  format: json
+  output: file
+  output_path: /var/log/gress/iot-monitoring.log
+
+security:
+  enable_tls: true
+  cert_file: /etc/gress/certs/server.crt
+  key_file: /etc/gress/certs/server.key
+  enable_auth: false
+  auth_type: none
