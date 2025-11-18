@@ -1,0 +1,133 @@
+groups:
+  - name: gress_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: sum(rate(gress_operator_errors_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected in Gress"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 1)"
+
+      # Critical error rate alert
+      - alert: CriticalErrorRate
+        expr: sum(rate(gress_operator_errors_total[5m])) > 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate detected in Gress"
+          description: "Error rate is {{ $value }} errors/sec (threshold: 10)"
+
+      # High processing latency
+      - alert: HighProcessingLatency
+        expr: histogram_quantile(0.99, sum(rate(gress_processing_latency_seconds_bucket[5m])) by (le)) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High processing latency detected"
+          description: "P99 latency is {{ $value }}s (threshold: 0.1s)"
+
+      # Circuit breaker open
+      - alert: CircuitBreakerOpen
+        expr: gress_circuit_breaker_state > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker {{ $labels.circuit_name }} is open"
+          description: "Circuit breaker state: {{ $value }} (0=closed, 1=open, 2=half-open)"
+
+      # High DLQ size
+      - alert: HighDLQSize
+        expr: sum(gress_dlq_size_events) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead Letter Queue size is high"
+          description: "DLQ contains {{ $value }} events (threshold: 1000)"
+
+      # Critical DLQ size
+      - alert: CriticalDLQSize
+        expr: sum(gress_dlq_size_events) > 10000
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dead Letter Queue size is critical"
+          description: "DLQ contains {{ $value }} events (threshold: 10000)"
+
+      # High backpressure
+      - alert: HighBackpressure
+        expr: rate(gress_backpressure_events_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High backpressure detected"
+          description: "Backpressure rate is {{ $value }} events/sec (threshold: 10)"
+
+      # High buffer utilization
+      - alert: HighBufferUtilization
+        expr: gress_buffer_utilization_ratio > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Buffer utilization is high"
+          description: "Buffer is {{ $value | humanizePercentage }} full (threshold: 90%)"
+
+      # Checkpoint failures
+      - alert: CheckpointFailures
+        expr: rate(gress_checkpoint_failure_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Checkpoint failures detected"
+          description: "Checkpoint failure rate is {{ $value }}/sec"
+
+      # High goroutine count
+      - alert: HighGoroutineCount
+        expr: gress_runtime_goroutines > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of goroutines"
+          description: "{{ $value }} goroutines are running (threshold: 10000)"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: gress_runtime_alloc_bytes > 2e9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Allocated memory is {{ $value | humanize }}B (threshold: 2GB)"
+
+      # Service down
+      - alert: GressDown
+        expr: up{job="gress"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gress service is down"
+          description: "The Gress service has been down for more than 1 minute"
+
+      # Low retry success rate
+      - alert: LowRetrySuccessRate
+        expr: sum(rate(gress_retry_successes_total[5m])) / (sum(rate(gress_retry_successes_total[5m])) + sum(rate(gress_retry_failures_total[5m]))) < 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low retry success rate"
+          description: "Retry success rate is {{ $value | humanizePercentage }} (threshold: 80%)"

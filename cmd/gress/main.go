@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/therealutkarshpriyadarshi/gress/pkg/config"
+	"github.com/therealutkarshpriyadarshi/gress/pkg/metrics"
+	"github.com/therealutkarshpriyadarshi/gress/pkg/tracing"
 	"go.uber.org/zap"
 )
 
@@ -76,8 +80,54 @@ func main() {
 		logger.Info("Configuration hot reload enabled")
 	}
 
+	// Initialize metrics collector
+	var metricsServer *metrics.Server
+	var runtimeCollector *metrics.RuntimeCollector
+	var systemCollector *metrics.SystemCollector
+
+	if cfg.Metrics.Enabled {
+		metricsCollector := metrics.NewCollector(logger)
+
+		// Create runtime and system collectors
+		runtimeCollector = metrics.NewRuntimeCollector(metricsCollector.GetRegistry(), logger)
+		systemCollector = metrics.NewSystemCollector(metricsCollector.GetRegistry(), logger)
+
+		// Start collectors
+		runtimeCollector.Start(cfg.Engine.MetricsInterval)
+		systemCollector.Start(cfg.Engine.MetricsInterval)
+
+		// Start metrics HTTP server
+		metricsServer = metrics.NewServer(cfg.Metrics.Address, metricsCollector, logger)
+		if err := metricsServer.Start(); err != nil {
+			logger.Fatal("Failed to start metrics server", zap.Error(err))
+		}
+		logger.Info("Metrics server started",
+			zap.String("address", cfg.Metrics.Address),
+			zap.String("path", cfg.Metrics.Path))
+	}
+
+	// Initialize distributed tracing
+	var tracingProvider *tracing.TracerProvider
+	if cfg.Tracing.Enabled {
+		tracingConfig := &tracing.Config{
+			Enabled:          cfg.Tracing.Enabled,
+			ServiceName:      cfg.Tracing.ServiceName,
+			ServiceVersion:   cfg.Tracing.ServiceVersion,
+			Environment:      cfg.Tracing.Environment,
+			SamplingRate:     cfg.Tracing.SamplingRate,
+			ExporterType:     cfg.Tracing.ExporterType,
+			ExporterEndpoint: cfg.Tracing.ExporterEndpoint,
+			OTLPHeaders:      cfg.Tracing.OTLPHeaders,
+			OTLPInsecure:     cfg.Tracing.OTLPInsecure,
+		}
+
+		tracingProvider, err = tracing.NewProvider(tracingConfig, logger)
+		if err != nil {
+			logger.Fatal("Failed to initialize tracing", zap.Error(err))
+		}
+	}
+
 	// TODO: Initialize stream processing engine with cfg.ToEngineConfig()
-	// TODO: Set up metrics server with cfg.Metrics
 	// TODO: Initialize sources from cfg.Sources
 	// TODO: Initialize sinks from cfg.Sinks
 	// TODO: Start processing
@@ -86,7 +136,8 @@ func main() {
 		zap.Int("buffer_size", cfg.Engine.BufferSize),
 		zap.Int("max_concurrency", cfg.Engine.MaxConcurrency),
 		zap.String("state_backend", cfg.State.Backend),
-		zap.Bool("metrics_enabled", cfg.Metrics.Enabled))
+		zap.Bool("metrics_enabled", cfg.Metrics.Enabled),
+		zap.Bool("tracing_enabled", cfg.Tracing.Enabled))
 
 	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
@@ -94,7 +145,28 @@ func main() {
 	<-sigChan
 
 	logger.Info("Shutting down gracefully...")
-	// TODO: Cleanup resources
+
+	// Cleanup resources
+	if runtimeCollector != nil {
+		runtimeCollector.Stop()
+	}
+	if systemCollector != nil {
+		systemCollector.Stop()
+	}
+	if metricsServer != nil {
+		if err := metricsServer.Stop(); err != nil {
+			logger.Error("Error stopping metrics server", zap.Error(err))
+		}
+	}
+	if tracingProvider != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := tracingProvider.Shutdown(ctx); err != nil {
+			logger.Error("Error shutting down tracing", zap.Error(err))
+		}
+	}
+
+	logger.Info("Shutdown complete")
 }
 
 func initLogger(logConfig config.LoggingConfig) *zap.Logger {
@@ -143,20 +215,8 @@ func initLogger(logConfig config.LoggingConfig) *zap.Logger {
 }
 
 func updateLogLevel(logger *zap.Logger, level string) {
-	var zapLevel zap.AtomicLevel
-
-	switch level {
-	case "debug":
-		zapLevel = zap.NewAtomicLevelAt(zap.DebugLevel)
-	case "info":
-		zapLevel = zap.NewAtomicLevelAt(zap.InfoLevel)
-	case "warn":
-		zapLevel = zap.NewAtomicLevelAt(zap.WarnLevel)
-	case "error":
-		zapLevel = zap.NewAtomicLevelAt(zap.ErrorLevel)
-	default:
-		zapLevel = zap.NewAtomicLevelAt(zap.InfoLevel)
-	}
-
+	// Note: This logs the level change but does not actually update the logger
+	// For dynamic log level updates, the logger would need to be created with
+	// zap.NewAtomicLevel() and the atomic level would need to be stored
 	logger.Info("Log level updated", zap.String("new_level", level))
 }

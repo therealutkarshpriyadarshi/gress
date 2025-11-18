@@ -1,0 +1,419 @@
+{
+  "dashboard": {
+    "title": "Gress Stream Processing - Overview",
+    "tags": ["gress", "stream-processing", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 8,
+          "h": 8
+        },
+        "type": "stat",
+        "title": "Events Processed (Total)",
+        "targets": [
+          {
+            "expr": "sum(rate(gress_events_processed_total[5m]))",
+            "legendFormat": "Events/sec",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 100000,
+                  "color": "yellow"
+                },
+                {
+                  "value": 1000000,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {
+          "x": 8,
+          "y": 0,
+          "w": 8,
+          "h": 8
+        },
+        "type": "stat",
+        "title": "Processing Latency (P99)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(gress_processing_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99 Latency",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "decimals": 3,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 0.01,
+                  "color": "yellow"
+                },
+                {
+                  "value": 0.1,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {
+          "x": 16,
+          "y": 0,
+          "w": 8,
+          "h": 8
+        },
+        "type": "stat",
+        "title": "Active Goroutines",
+        "targets": [
+          {
+            "expr": "gress_runtime_goroutines",
+            "legendFormat": "Goroutines",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 1000,
+                  "color": "yellow"
+                },
+                {
+                  "value": 10000,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 9
+        },
+        "type": "graph",
+        "title": "Event Processing Rate by Source",
+        "targets": [
+          {
+            "expr": "rate(gress_events_processed_total[5m])",
+            "legendFormat": "{{source}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Events/sec"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 12,
+          "h": 9
+        },
+        "type": "graph",
+        "title": "Processing Latency Percentiles",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(gress_processing_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.90, sum(rate(gress_processing_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P90",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(gress_processing_latency_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Latency"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 0,
+        "linewidth": 2,
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {
+          "x": 0,
+          "y": 17,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "Operator Events In/Out",
+        "targets": [
+          {
+            "expr": "rate(gress_operator_events_in_total[5m])",
+            "legendFormat": "In - {{operator}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gress_operator_events_out_total[5m])",
+            "legendFormat": "Out - {{operator}}",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Events/sec"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "id": 7,
+        "gridPos": {
+          "x": 12,
+          "y": 17,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "State Backend Operations",
+        "targets": [
+          {
+            "expr": "rate(gress_state_operations_total[5m])",
+            "legendFormat": "{{operation}} - {{backend}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Operations/sec"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "current": true
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": {
+          "x": 0,
+          "y": 25,
+          "w": 8,
+          "h": 8
+        },
+        "type": "gauge",
+        "title": "Buffer Utilization",
+        "targets": [
+          {
+            "expr": "gress_buffer_utilization_ratio",
+            "legendFormat": "Buffer",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 0.7,
+                  "color": "yellow"
+                },
+                {
+                  "value": 0.9,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "gridPos": {
+          "x": 8,
+          "y": 25,
+          "w": 8,
+          "h": 8
+        },
+        "type": "stat",
+        "title": "Backpressure Events",
+        "targets": [
+          {
+            "expr": "rate(gress_backpressure_events_total[5m])",
+            "legendFormat": "Events/sec",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 1,
+                  "color": "yellow"
+                },
+                {
+                  "value": 10,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "gridPos": {
+          "x": 16,
+          "y": 25,
+          "w": 8,
+          "h": 8
+        },
+        "type": "stat",
+        "title": "Checkpoint Success Rate",
+        "targets": [
+          {
+            "expr": "rate(gress_checkpoint_success_total[5m]) / (rate(gress_checkpoint_success_total[5m]) + rate(gress_checkpoint_failure_total[5m]))",
+            "legendFormat": "Success Rate",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "red"
+                },
+                {
+                  "value": 0.95,
+                  "color": "yellow"
+                },
+                {
+                  "value": 0.99,
+                  "color": "green"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}

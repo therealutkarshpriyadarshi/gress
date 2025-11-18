@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gress-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./alerts:/etc/prometheus/alerts
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - gress-monitoring
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gress-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - gress-monitoring
+
+  # Jaeger for distributed tracing (all-in-one)
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: gress-jaeger
+    ports:
+      - "5775:5775/udp"   # zipkin.thrift
+      - "6831:6831/udp"   # jaeger.thrift compact
+      - "6832:6832/udp"   # jaeger.thrift binary
+      - "5778:5778"       # config
+      - "16686:16686"     # UI
+      - "14250:14250"     # model.proto
+      - "14268:14268"     # jaeger.thrift
+      - "14269:14269"     # admin
+      - "9411:9411"       # zipkin
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - gress-monitoring
+
+  # OpenTelemetry Collector (optional - for OTLP export)
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: gress-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics exposed by the collector
+      - "8889:8889"   # Prometheus exporter metrics
+      - "13133:13133" # health_check extension
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    depends_on:
+      - jaeger
+      - prometheus
+    networks:
+      - gress-monitoring
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  gress-monitoring:
+    driver: bridge

@@ -1,0 +1,335 @@
+{
+  "dashboard": {
+    "title": "Gress Stream Processing - Runtime & System Metrics",
+    "tags": ["gress", "runtime", "system"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "Memory Usage",
+        "targets": [
+          {
+            "expr": "gress_runtime_alloc_bytes",
+            "legendFormat": "Allocated",
+            "refId": "A"
+          },
+          {
+            "expr": "gress_runtime_sys_bytes",
+            "legendFormat": "System",
+            "refId": "B"
+          },
+          {
+            "expr": "gress_runtime_heap_inuse_bytes",
+            "legendFormat": "Heap In-Use",
+            "refId": "C"
+          },
+          {
+            "expr": "gress_runtime_heap_idle_bytes",
+            "legendFormat": "Heap Idle",
+            "refId": "D"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "bytes",
+            "label": "Memory"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true
+        }
+      },
+      {
+        "id": 2,
+        "gridPos": {
+          "x": 12,
+          "y": 0,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "Goroutines",
+        "targets": [
+          {
+            "expr": "gress_runtime_goroutines",
+            "legendFormat": "Active Goroutines",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Count"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2,
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [10000],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "High Goroutine Count",
+          "noDataState": "no_data",
+          "message": "Goroutine count is unusually high"
+        }
+      },
+      {
+        "id": 3,
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "GC Activity",
+        "targets": [
+          {
+            "expr": "rate(gress_runtime_gc_total[5m])",
+            "legendFormat": "GC Rate",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "GC/sec"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "id": 4,
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "GC Pause Duration",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(gress_runtime_gc_pause_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.90, sum(rate(gress_runtime_gc_pause_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P90",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(gress_runtime_gc_pause_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "s",
+            "label": "Duration"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 0,
+        "linewidth": 2,
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "avg": true,
+          "current": true,
+          "max": true
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {
+          "x": 0,
+          "y": 16,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "Heap Objects",
+        "targets": [
+          {
+            "expr": "gress_runtime_heap_objects",
+            "legendFormat": "Objects",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Count"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "id": 6,
+        "gridPos": {
+          "x": 12,
+          "y": 16,
+          "w": 12,
+          "h": 8
+        },
+        "type": "graph",
+        "title": "Memory Released to OS",
+        "targets": [
+          {
+            "expr": "gress_runtime_heap_released_bytes",
+            "legendFormat": "Released",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "bytes",
+            "label": "Memory"
+          },
+          {
+            "format": "short"
+          }
+        ],
+        "lines": true,
+        "fill": 1,
+        "linewidth": 2
+      },
+      {
+        "id": 7,
+        "gridPos": {
+          "x": 0,
+          "y": 24,
+          "w": 8,
+          "h": 6
+        },
+        "type": "stat",
+        "title": "Process Uptime",
+        "targets": [
+          {
+            "expr": "gress_process_uptime_seconds",
+            "legendFormat": "Uptime",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "decimals": 0
+          }
+        }
+      },
+      {
+        "id": 8,
+        "gridPos": {
+          "x": 8,
+          "y": 24,
+          "w": 8,
+          "h": 6
+        },
+        "type": "stat",
+        "title": "CPU Cores",
+        "targets": [
+          {
+            "expr": "gress_runtime_cpu_cores",
+            "legendFormat": "Cores",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 0
+          }
+        }
+      },
+      {
+        "id": 9,
+        "gridPos": {
+          "x": 16,
+          "y": 24,
+          "w": 8,
+          "h": 6
+        },
+        "type": "stat",
+        "title": "Next GC Target",
+        "targets": [
+          {
+            "expr": "gress_runtime_next_gc_bytes",
+            "legendFormat": "Target",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "decimals": 2
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    }
+  }
+}
