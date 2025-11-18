@@ -1,0 +1,106 @@
+# Gress Production Configuration
+# This configuration is optimized for production deployments
+
+version: v1
+
+application:
+  name: gress-prod
+  environment: production
+  tags:
+    team: platform
+    purpose: production
+
+engine:
+  buffer_size: 50000
+  max_concurrency: 500
+  checkpoint_interval: 30s
+  watermark_interval: 5s
+  metrics_interval: 10s
+  enable_backpressure: true
+  backpressure_threshold: 0.8
+  checkpoint_dir: /var/lib/gress/checkpoints
+
+error_handling:
+  strategy: retry-then-dlq
+  enable_retry: true
+  max_retry_attempts: 5
+  initial_backoff: 200ms
+  max_backoff: 60s
+  backoff_multiplier: 2.0
+  backoff_jitter: 0.2
+  enable_dlq: true
+  dlq_max_size: 100000
+  dlq_type: kafka
+  dlq_kafka_topic: gress-dlq
+  dlq_kafka_brokers:
+    - kafka-1.prod.example.com:9092
+    - kafka-2.prod.example.com:9092
+    - kafka-3.prod.example.com:9092
+  enable_circuit_breaker: true
+  circuit_breaker:
+    failure_threshold: 10
+    success_threshold: 3
+    timeout: 120s
+  enable_side_outputs: true
+  side_output_buffer_size: 5000
+
+sources:
+  kafka:
+    - name: main-kafka-source
+      brokers:
+        - kafka-1.prod.example.com:9092
+        - kafka-2.prod.example.com:9092
+        - kafka-3.prod.example.com:9092
+      topics:
+        - events
+        - transactions
+      group_id: gress-consumer-group
+      auto_commit: true
+      commit_interval: 5s
+
+sinks:
+  kafka:
+    - name: processed-events-sink
+      brokers:
+        - kafka-1.prod.example.com:9092
+        - kafka-2.prod.example.com:9092
+        - kafka-3.prod.example.com:9092
+      topic: processed-events
+      flush_interval: 1s
+      batch_size: 1000
+
+  timescaledb:
+    - name: metrics-sink
+      connection_string: "host=timescale.prod.example.com port=5432 user=gress password=$TIMESCALE_PASSWORD dbname=metrics sslmode=require"
+      table: stream_metrics
+      batch_size: 500
+      flush_interval: 5s
+
+state:
+  backend: rocksdb
+  rocksdb:
+    path: /var/lib/gress/rocksdb
+    write_buffer_size: 134217728  # 128 MB
+    max_write_buffer_number: 5
+    block_cache_size: 2147483648  # 2 GB
+
+metrics:
+  enabled: true
+  address: ":9091"
+  path: /metrics
+  namespace: gress
+  subsystem: stream
+
+logging:
+  level: warn
+  format: json
+  output: file
+  output_path: /var/log/gress/app.log
+
+security:
+  enable_tls: true
+  cert_file: /etc/gress/certs/server.crt
+  key_file: /etc/gress/certs/server.key
+  ca_file: /etc/gress/certs/ca.crt
+  enable_auth: true
+  auth_type: mtls

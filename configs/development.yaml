@@ -1,0 +1,74 @@
+# Gress Development Configuration
+# This configuration is optimized for local development and testing
+
+version: v1
+
+application:
+  name: gress-dev
+  environment: development
+  tags:
+    team: engineering
+    purpose: development
+
+engine:
+  buffer_size: 1000
+  max_concurrency: 10
+  checkpoint_interval: 60s
+  watermark_interval: 10s
+  metrics_interval: 5s
+  enable_backpressure: false
+  backpressure_threshold: 0.8
+  checkpoint_dir: ./checkpoints
+
+error_handling:
+  strategy: fail-fast
+  enable_retry: false
+  max_retry_attempts: 0
+  initial_backoff: 100ms
+  max_backoff: 1s
+  backoff_multiplier: 2.0
+  backoff_jitter: 0.1
+  enable_dlq: false
+  dlq_max_size: 100
+  dlq_type: memory
+  enable_circuit_breaker: false
+  circuit_breaker:
+    failure_threshold: 5
+    success_threshold: 2
+    timeout: 30s
+  enable_side_outputs: true
+  side_output_buffer_size: 100
+
+sources:
+  http:
+    - name: test-http-source
+      address: ":8080"
+      path: /events
+      tls: false
+
+sinks: {}
+
+state:
+  backend: memory
+  rocksdb:
+    path: ./data/rocksdb
+    write_buffer_size: 67108864  # 64 MB
+    max_write_buffer_number: 3
+    block_cache_size: 536870912  # 512 MB
+
+metrics:
+  enabled: true
+  address: ":9091"
+  path: /metrics
+  namespace: gress
+  subsystem: stream
+
+logging:
+  level: debug
+  format: console
+  output: stdout
+
+security:
+  enable_tls: false
+  enable_auth: false
+  auth_type: none
