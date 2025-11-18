@@ -7,27 +7,35 @@ import (
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/therealutkarshpriyadarshi/gress/pkg/config"
+	"github.com/therealutkarshpriyadarshi/gress/pkg/schema"
 	"github.com/therealutkarshpriyadarshi/gress/pkg/stream"
 	"go.uber.org/zap"
 )
 
 // KafkaSource ingests events from Kafka topics
 type KafkaSource struct {
-	brokers    []string
-	topics     []string
-	groupID    string
-	consumer   *kafka.Consumer
-	logger     *zap.Logger
-	partitions int32
+	brokers      []string
+	topics       []string
+	groupID      string
+	consumer     *kafka.Consumer
+	logger       *zap.Logger
+	partitions   int32
+	codecManager *schema.CodecManager
+	valueSchema  *config.SourceSchemaConfig
+	keySchema    *config.SourceSchemaConfig
 }
 
 // KafkaSourceConfig holds Kafka source configuration
 type KafkaSourceConfig struct {
-	Brokers        []string
-	Topics         []string
-	GroupID        string
+	Brokers         []string
+	Topics          []string
+	GroupID         string
 	AutoOffsetReset string
 	EnableAutoCommit bool
+	CodecManager    *schema.CodecManager
+	ValueSchema     *config.SourceSchemaConfig
+	KeySchema       *config.SourceSchemaConfig
 }
 
 // NewKafkaSource creates a new Kafka source
@@ -58,12 +66,15 @@ func NewKafkaSource(config KafkaSourceConfig, logger *zap.Logger) (*KafkaSource,
 	}
 
 	return &KafkaSource{
-		brokers:    config.Brokers,
-		topics:     config.Topics,
-		groupID:    config.GroupID,
-		consumer:   consumer,
-		logger:     logger,
-		partitions: 0,
+		brokers:      config.Brokers,
+		topics:       config.Topics,
+		groupID:      config.GroupID,
+		consumer:     consumer,
+		logger:       logger,
+		partitions:   0,
+		codecManager: config.CodecManager,
+		valueSchema:  config.ValueSchema,
+		keySchema:    config.KeySchema,
 	}, nil
 }
 
@@ -121,9 +132,63 @@ func (k *KafkaSource) Start(ctx context.Context, output chan<- *stream.Event) er
 // messageToEvent converts a Kafka message to a stream event
 func (k *KafkaSource) messageToEvent(msg *kafka.Message) *stream.Event {
 	var value interface{}
-	if err := json.Unmarshal(msg.Value, &value); err != nil {
-		// If not JSON, use raw bytes
-		value = msg.Value
+	var key interface{}
+
+	// Decode value using schema if configured
+	if k.codecManager != nil && k.valueSchema != nil {
+		schemaConfig := &schema.SchemaConfig{
+			Subject:        k.valueSchema.Subject,
+			SchemaType:     schema.SchemaType(k.valueSchema.SchemaType),
+			Version:        k.valueSchema.Version,
+			ValidateOnRead: k.valueSchema.ValidateOnRead,
+		}
+
+		decoded, err := k.codecManager.Decode(context.Background(), msg.Value, schemaConfig)
+		if err != nil {
+			k.logger.Warn("Failed to decode value with schema, falling back to JSON",
+				zap.Error(err),
+				zap.String("subject", k.valueSchema.Subject),
+			)
+			// Fallback to JSON
+			if err := json.Unmarshal(msg.Value, &value); err != nil {
+				value = msg.Value
+			} else {
+				value = decoded
+			}
+		} else {
+			value = decoded
+		}
+	} else {
+		// Original behavior: try JSON, fallback to raw bytes
+		if err := json.Unmarshal(msg.Value, &value); err != nil {
+			value = msg.Value
+		}
+	}
+
+	// Decode key using schema if configured
+	if k.codecManager != nil && k.keySchema != nil && len(msg.Key) > 0 {
+		schemaConfig := &schema.SchemaConfig{
+			Subject:        k.keySchema.Subject,
+			SchemaType:     schema.SchemaType(k.keySchema.SchemaType),
+			Version:        k.keySchema.Version,
+			ValidateOnRead: k.keySchema.ValidateOnRead,
+		}
+
+		decoded, err := k.codecManager.Decode(context.Background(), msg.Key, schemaConfig)
+		if err != nil {
+			k.logger.Warn("Failed to decode key with schema, using string",
+				zap.Error(err),
+				zap.String("subject", k.keySchema.Subject),
+			)
+			key = string(msg.Key)
+		} else {
+			key = decoded
+		}
+	} else {
+		// Original behavior: convert to string
+		if len(msg.Key) > 0 {
+			key = string(msg.Key)
+		}
 	}
 
 	headers := make(map[string]string)
@@ -132,7 +197,7 @@ func (k *KafkaSource) messageToEvent(msg *kafka.Message) *stream.Event {
 	}
 
 	event := &stream.Event{
-		Key:       string(msg.Key),
+		Key:       key,
 		Value:     value,
 		EventTime: msg.Timestamp,
 		Headers:   headers,

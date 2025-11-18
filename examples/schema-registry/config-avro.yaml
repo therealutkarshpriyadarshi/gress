@@ -1,0 +1,112 @@
+version: v1
+
+application:
+  name: gress-avro-example
+  environment: development
+  tags:
+    use_case: "avro-schema-registry"
+
+# Schema Registry Configuration
+schema_registry:
+  enabled: true
+  url: "http://localhost:8081"
+  cache_enabled: true
+  cache_size: 1000
+  cache_ttl: 5m
+  timeout: 30s
+  tls_enabled: false
+  # Optional: Authentication
+  # username: "schema-registry-user"
+  # password: "secret"
+
+engine:
+  buffer_size: 10000
+  max_concurrency: 100
+  checkpoint_interval: 30s
+  watermark_interval: 5s
+  metrics_interval: 10s
+  enable_backpressure: true
+  backpressure_threshold: 0.8
+  checkpoint_dir: "./checkpoints"
+
+error_handling:
+  strategy: "retry-then-dlq"
+  enable_retry: true
+  max_retry_attempts: 3
+  initial_backoff: 100ms
+  max_backoff: 30s
+  backoff_multiplier: 2.0
+  enable_dlq: true
+  dlq_type: "memory"
+  enable_circuit_breaker: true
+  circuit_breaker:
+    failure_threshold: 5
+    success_threshold: 2
+    timeout: 60s
+
+sources:
+  kafka:
+    - name: "user-events-avro"
+      brokers:
+        - "localhost:9092"
+      topics:
+        - "user-events"
+      group_id: "gress-avro-consumer"
+      auto_commit: false
+      commit_interval: 5s
+      # Avro schema configuration for values
+      value_schema:
+        subject: "user-events-value"
+        schema_type: "AVRO"
+        version: 0  # 0 means latest version
+        validate_on_read: true
+      # Avro schema configuration for keys (optional)
+      key_schema:
+        subject: "user-events-key"
+        schema_type: "AVRO"
+        version: 0
+        validate_on_read: false
+
+sinks:
+  kafka:
+    - name: "processed-events-avro"
+      brokers:
+        - "localhost:9092"
+      topic: "processed-events"
+      batch_size: 100
+      flush_interval: 1s
+      # Avro schema configuration for values
+      value_schema:
+        subject: "processed-events-value"
+        schema_type: "AVRO"
+        version: 0
+        auto_register: true  # Auto-register schema if it doesn't exist
+        compatibility: "BACKWARD"  # BACKWARD, FORWARD, FULL, etc.
+        validate_on_write: true
+      # Avro schema configuration for keys (optional)
+      key_schema:
+        subject: "processed-events-key"
+        schema_type: "AVRO"
+        version: 0
+        auto_register: true
+        compatibility: "BACKWARD"
+        validate_on_write: false
+
+state:
+  backend: "memory"
+
+metrics:
+  enabled: true
+  address: ":9091"
+  path: "/metrics"
+  namespace: "gress"
+  subsystem: "stream"
+
+logging:
+  level: "debug"
+  format: "console"
+  output: "stdout"
+
+security:
+  enable_tls: false
+  enable_auth: false

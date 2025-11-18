@@ -1,0 +1,100 @@
+version: v1
+
+application:
+  name: gress-protobuf-example
+  environment: development
+  tags:
+    use_case: "protobuf-schema-registry"
+
+# Schema Registry Configuration
+schema_registry:
+  enabled: true
+  url: "http://localhost:8081"
+  cache_enabled: true
+  cache_size: 1000
+  cache_ttl: 5m
+  timeout: 30s
+  tls_enabled: false
+
+engine:
+  buffer_size: 10000
+  max_concurrency: 100
+  checkpoint_interval: 30s
+  watermark_interval: 5s
+  metrics_interval: 10s
+  enable_backpressure: true
+  backpressure_threshold: 0.8
+  checkpoint_dir: "./checkpoints"
+
+error_handling:
+  strategy: "retry-then-dlq"
+  enable_retry: true
+  max_retry_attempts: 3
+  initial_backoff: 100ms
+  max_backoff: 30s
+  backoff_multiplier: 2.0
+  enable_dlq: true
+  dlq_type: "memory"
+  enable_circuit_breaker: true
+  circuit_breaker:
+    failure_threshold: 5
+    success_threshold: 2
+    timeout: 60s
+
+sources:
+  kafka:
+    - name: "sensor-data-protobuf"
+      brokers:
+        - "localhost:9092"
+      topics:
+        - "sensor-data"
+      group_id: "gress-protobuf-consumer"
+      auto_commit: false
+      commit_interval: 5s
+      # Protobuf schema configuration for values
+      value_schema:
+        subject: "sensor-data-value"
+        schema_type: "PROTOBUF"
+        version: 0  # 0 means latest version
+        validate_on_read: true
+
+sinks:
+  kafka:
+    - name: "analyzed-sensor-data-protobuf"
+      brokers:
+        - "localhost:9092"
+      topic: "analyzed-sensor-data"
+      batch_size: 100
+      flush_interval: 1s
+      # Protobuf schema configuration for values
+      value_schema:
+        subject: "analyzed-sensor-data-value"
+        schema_type: "PROTOBUF"
+        version: 0
+        auto_register: true
+        compatibility: "BACKWARD_TRANSITIVE"
+        validate_on_write: true
+
+state:
+  backend: "rocksdb"
+  rocksdb:
+    path: "./data/rocksdb"
+    write_buffer_size: 67108864
+    max_write_buffer_number: 3
+    block_cache_size: 536870912
+
+metrics:
+  enabled: true
+  address: ":9091"
+  path: "/metrics"
+  namespace: "gress"
+  subsystem: "stream"
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+security:
+  enable_tls: false
+  enable_auth: false
