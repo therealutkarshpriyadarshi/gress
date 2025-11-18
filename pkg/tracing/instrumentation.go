@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -64,11 +65,11 @@ func NewInstrumentationHelper(provider *TracerProvider, logger *zap.Logger) *Ins
 }
 
 // TraceEventProcessing traces event processing through the pipeline
-func (ih *InstrumentationHelper) TraceEventProcessing(ctx context.Context, eventKey string, operatorName string) (context.Context, *Span) {
+func (ih *InstrumentationHelper) TraceEventProcessing(ctx context.Context, eventKey string, operatorName string) (context.Context, trace.Span) {
 	spanName := fmt.Sprintf("process_event.%s", operatorName)
 	ctx, span := ih.provider.StartSpan(ctx, spanName)
 
-	span.SetAttributes(map[string]interface{}{
+	SetSpanAttributes(ctx, map[string]interface{}{
 		"event.key":      eventKey,
 		"operator.name":  operatorName,
 		"component":      "stream_processor",
@@ -78,11 +79,11 @@ func (ih *InstrumentationHelper) TraceEventProcessing(ctx context.Context, event
 }
 
 // TraceStateOperation traces state backend operations
-func (ih *InstrumentationHelper) TraceStateOperation(ctx context.Context, operation, backend, key string) (context.Context, *Span) {
+func (ih *InstrumentationHelper) TraceStateOperation(ctx context.Context, operation, backend, key string) (context.Context, trace.Span) {
 	spanName := fmt.Sprintf("state.%s", operation)
 	ctx, span := ih.provider.StartSpan(ctx, spanName)
 
-	span.SetAttributes(map[string]interface{}{
+	SetSpanAttributes(ctx, map[string]interface{}{
 		"state.operation": operation,
 		"state.backend":   backend,
 		"state.key":       key,
@@ -93,10 +94,10 @@ func (ih *InstrumentationHelper) TraceStateOperation(ctx context.Context, operat
 }
 
 // TraceCheckpoint traces checkpoint operations
-func (ih *InstrumentationHelper) TraceCheckpoint(ctx context.Context, checkpointID string) (context.Context, *Span) {
+func (ih *InstrumentationHelper) TraceCheckpoint(ctx context.Context, checkpointID string) (context.Context, trace.Span) {
 	ctx, span := ih.provider.StartSpan(ctx, "checkpoint.create")
 
-	span.SetAttributes(map[string]interface{}{
+	SetSpanAttributes(ctx, map[string]interface{}{
 		"checkpoint.id": checkpointID,
 		"component":     "checkpoint_manager",
 	})
@@ -105,11 +106,11 @@ func (ih *InstrumentationHelper) TraceCheckpoint(ctx context.Context, checkpoint
 }
 
 // TraceWindow traces window operations
-func (ih *InstrumentationHelper) TraceWindow(ctx context.Context, windowType string, windowStart, windowEnd time.Time) (context.Context, *Span) {
+func (ih *InstrumentationHelper) TraceWindow(ctx context.Context, windowType string, windowStart, windowEnd time.Time) (context.Context, trace.Span) {
 	spanName := fmt.Sprintf("window.%s", windowType)
 	ctx, span := ih.provider.StartSpan(ctx, spanName)
 
-	span.SetAttributes(map[string]interface{}{
+	SetSpanAttributes(ctx, map[string]interface{}{
 		"window.type":  windowType,
 		"window.start": windowStart.Format(time.RFC3339),
 		"window.end":   windowEnd.Format(time.RFC3339),

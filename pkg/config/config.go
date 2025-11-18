@@ -35,6 +35,9 @@ type Config struct {
 	// Metrics and monitoring configuration
 	Metrics MetricsConfig `yaml:"metrics" json:"metrics"`
 
+	// Distributed tracing configuration
+	Tracing TracingConfig `yaml:"tracing" json:"tracing"`
+
 	// Logging configuration
 	Logging LoggingConfig `yaml:"logging" json:"logging"`
 
@@ -204,6 +207,19 @@ type MetricsConfig struct {
 	Path       string `yaml:"path" json:"path"`
 	Namespace  string `yaml:"namespace" json:"namespace"`
 	Subsystem  string `yaml:"subsystem" json:"subsystem"`
+}
+
+// TracingConfig holds distributed tracing configuration
+type TracingConfig struct {
+	Enabled          bool    `yaml:"enabled" json:"enabled"`
+	ServiceName      string  `yaml:"service_name" json:"service_name"`
+	ServiceVersion   string  `yaml:"service_version" json:"service_version"`
+	Environment      string  `yaml:"environment" json:"environment"`
+	SamplingRate     float64 `yaml:"sampling_rate" json:"sampling_rate"`
+	ExporterType     string  `yaml:"exporter_type" json:"exporter_type"` // "jaeger", "otlp", "stdout"
+	ExporterEndpoint string  `yaml:"exporter_endpoint" json:"exporter_endpoint"`
+	OTLPHeaders      map[string]string `yaml:"otlp_headers" json:"otlp_headers"`
+	OTLPInsecure     bool    `yaml:"otlp_insecure" json:"otlp_insecure"`
 }
 
 // LoggingConfig holds logging configuration
@@ -505,6 +521,17 @@ func DefaultConfig() *Config {
 			Path:      "/metrics",
 			Namespace: "gress",
 			Subsystem: "stream",
+		},
+		Tracing: TracingConfig{
+			Enabled:          false,
+			ServiceName:      "gress",
+			ServiceVersion:   "1.0.0",
+			Environment:      "development",
+			SamplingRate:     1.0,
+			ExporterType:     "otlp",
+			ExporterEndpoint: "http://localhost:4318/v1/traces",
+			OTLPHeaders:      make(map[string]string),
+			OTLPInsecure:     true,
 		},
 		Logging: LoggingConfig{
 			Level:  "info",

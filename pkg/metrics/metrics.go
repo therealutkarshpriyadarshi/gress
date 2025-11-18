@@ -340,6 +340,11 @@ func (c *Collector) Handler() http.Handler {
 	})
 }
 
+// GetRegistry returns the underlying Prometheus registry
+func (c *Collector) GetRegistry() *prometheus.Registry {
+	return c.registry
+}
+
 // Server creates an HTTP server for metrics exposition
 type Server struct {
 	collector *Collector

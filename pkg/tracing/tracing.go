@@ -3,51 +3,61 @@ package tracing
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.21.0"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
 // TracerProvider manages distributed tracing configuration
 type TracerProvider struct {
-	serviceName string
+	serviceName    string
 	serviceVersion string
-	environment string
-	logger *zap.Logger
-	enabled bool
+	environment    string
+	logger         *zap.Logger
+	enabled        bool
+	provider       *sdktrace.TracerProvider
+	tracer         trace.Tracer
 }
 
 // Config holds tracing configuration
 type Config struct {
-	Enabled         bool
-	ServiceName     string
-	ServiceVersion  string
-	Environment     string
-	SamplingRate    float64
-	ExporterType    string // "jaeger", "zipkin", "otlp"
+	Enabled          bool
+	ServiceName      string
+	ServiceVersion   string
+	Environment      string
+	SamplingRate     float64
+	ExporterType     string // "jaeger", "otlp", "stdout"
 	ExporterEndpoint string
+	OTLPHeaders      map[string]string
+	OTLPInsecure     bool
 }
 
 // DefaultConfig returns default tracing configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Enabled:         false,
-		ServiceName:     "gress",
-		ServiceVersion:  "1.0.0",
-		Environment:     "development",
-		SamplingRate:    1.0,
-		ExporterType:    "jaeger",
-		ExporterEndpoint: "http://localhost:14268/api/traces",
+		Enabled:          false,
+		ServiceName:      "gress",
+		ServiceVersion:   "1.0.0",
+		Environment:      "development",
+		SamplingRate:     1.0,
+		ExporterType:     "otlp",
+		ExporterEndpoint: "http://localhost:4318/v1/traces",
+		OTLPHeaders:      make(map[string]string),
+		OTLPInsecure:     true,
 	}
 }
 
-// NewProvider creates a new tracing provider
-// Note: This is a placeholder implementation. To enable full OpenTelemetry support,
-// add the following dependencies to go.mod:
-//   go.opentelemetry.io/otel v1.19.0
-//   go.opentelemetry.io/otel/sdk v1.19.0
-//   go.opentelemetry.io/otel/exporters/jaeger v1.17.0
-//   go.opentelemetry.io/otel/exporters/zipkin v1.19.0
-//   go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.19.0
+// NewProvider creates a new tracing provider with OpenTelemetry
 func NewProvider(config *Config, logger *zap.Logger) (*TracerProvider, error) {
 	if config == nil {
 		config = DefaultConfig()
@@ -66,151 +76,227 @@ func NewProvider(config *Config, logger *zap.Logger) (*TracerProvider, error) {
 		return provider, nil
 	}
 
+	// Create resource with service information
+	res, err := resource.Merge(
+		resource.Default(),
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceName(config.ServiceName),
+			semconv.ServiceVersion(config.ServiceVersion),
+			attribute.String("environment", config.Environment),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	// Create exporter based on configuration
+	var exporter sdktrace.SpanExporter
+	switch config.ExporterType {
+	case "jaeger":
+		exporter, err = jaeger.New(
+			jaeger.WithCollectorEndpoint(
+				jaeger.WithEndpoint(config.ExporterEndpoint),
+			),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Jaeger exporter: %w", err)
+		}
+	case "otlp":
+		opts := []otlptracehttp.Option{
+			otlptracehttp.WithEndpoint(config.ExporterEndpoint),
+		}
+		if config.OTLPInsecure {
+			opts = append(opts, otlptracehttp.WithInsecure())
+		}
+		if len(config.OTLPHeaders) > 0 {
+			opts = append(opts, otlptracehttp.WithHeaders(config.OTLPHeaders))
+		}
+		exporter, err = otlptracehttp.New(context.Background(), opts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create OTLP exporter: %w", err)
+		}
+	case "stdout":
+		exporter, err = stdouttrace.New(
+			stdouttrace.WithPrettyPrint(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create stdout exporter: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported exporter type: %s", config.ExporterType)
+	}
+
+	// Create sampler based on sampling rate
+	var sampler sdktrace.Sampler
+	if config.SamplingRate >= 1.0 {
+		sampler = sdktrace.AlwaysSample()
+	} else if config.SamplingRate <= 0.0 {
+		sampler = sdktrace.NeverSample()
+	} else {
+		sampler = sdktrace.TraceIDRatioBased(config.SamplingRate)
+	}
+
+	// Create trace provider
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter,
+			sdktrace.WithBatchTimeout(5*time.Second),
+			sdktrace.WithMaxExportBatchSize(512),
+		),
+		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sampler),
+	)
+
+	// Set global trace provider
+	otel.SetTracerProvider(tp)
+
+	// Set global propagator for context propagation (W3C Trace Context)
+	otel.SetTextMapPropagator(
+		propagation.NewCompositeTextMapPropagator(
+			propagation.TraceContext{},
+			propagation.Baggage{},
+		),
+	)
+
+	provider.provider = tp
+	provider.tracer = tp.Tracer(
+		config.ServiceName,
+		trace.WithInstrumentationVersion(config.ServiceVersion),
+	)
+
 	logger.Info("Distributed tracing initialized",
 		zap.String("service", config.ServiceName),
+		zap.String("version", config.ServiceVersion),
 		zap.String("exporter", config.ExporterType),
-		zap.String("endpoint", config.ExporterEndpoint))
+		zap.String("endpoint", config.ExporterEndpoint),
+		zap.Float64("sampling_rate", config.SamplingRate))
 
 	return provider, nil
 }
 
 // StartSpan starts a new tracing span
-// This is a placeholder implementation. Real implementation would use:
-//   tracer := otel.Tracer("gress")
-//   ctx, span := tracer.Start(ctx, name)
-func (tp *TracerProvider) StartSpan(ctx context.Context, name string) (context.Context, *Span) {
-	if !tp.enabled {
-		return ctx, &Span{enabled: false}
+func (tp *TracerProvider) StartSpan(ctx context.Context, name string, opts ...trace.SpanStartOption) (context.Context, trace.Span) {
+	if !tp.enabled || tp.tracer == nil {
+		return ctx, trace.SpanFromContext(ctx)
 	}
-
-	span := &Span{
-		name:    name,
-		enabled: true,
-		logger:  tp.logger,
-	}
-
-	tp.logger.Debug("Started span", zap.String("name", name))
-	return ctx, span
+	return tp.tracer.Start(ctx, name, opts...)
 }
 
 // Shutdown gracefully shuts down the tracer provider
 func (tp *TracerProvider) Shutdown(ctx context.Context) error {
-	if !tp.enabled {
+	if !tp.enabled || tp.provider == nil {
 		return nil
 	}
 
 	tp.logger.Info("Shutting down tracing provider")
-	return nil
+
+	shutdownCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	return tp.provider.Shutdown(shutdownCtx)
 }
 
-// Span represents a distributed tracing span
-type Span struct {
-	name    string
-	enabled bool
-	logger  *zap.Logger
-}
-
-// SetAttribute sets an attribute on the span
-func (s *Span) SetAttribute(key string, value interface{}) {
-	if !s.enabled {
-		return
+// GetTracer returns the underlying tracer
+func (tp *TracerProvider) GetTracer() trace.Tracer {
+	if !tp.enabled || tp.tracer == nil {
+		return otel.Tracer("noop")
 	}
-	s.logger.Debug("Span attribute set",
-		zap.String("span", s.name),
-		zap.String("key", key),
-		zap.Any("value", value))
+	return tp.tracer
 }
 
-// SetAttributes sets multiple attributes on the span
-func (s *Span) SetAttributes(attrs map[string]interface{}) {
-	if !s.enabled {
-		return
-	}
-	for k, v := range attrs {
-		s.SetAttribute(k, v)
-	}
+// SpanFromContext extracts the current span from context
+func SpanFromContext(ctx context.Context) trace.Span {
+	return trace.SpanFromContext(ctx)
 }
 
-// RecordError records an error on the span
-func (s *Span) RecordError(err error) {
-	if !s.enabled || err == nil {
-		return
-	}
-	s.logger.Error("Span error recorded",
-		zap.String("span", s.name),
-		zap.Error(err))
-}
-
-// SetStatus sets the status of the span
-func (s *Span) SetStatus(code StatusCode, description string) {
-	if !s.enabled {
-		return
-	}
-	s.logger.Debug("Span status set",
-		zap.String("span", s.name),
-		zap.String("code", code.String()),
-		zap.String("description", description))
-}
-
-// End ends the span
-func (s *Span) End() {
-	if !s.enabled {
-		return
-	}
-	s.logger.Debug("Span ended", zap.String("name", s.name))
-}
-
-// StatusCode represents span status
-type StatusCode int
-
-const (
-	StatusCodeUnset StatusCode = iota
-	StatusCodeOk
-	StatusCodeError
-)
-
-func (sc StatusCode) String() string {
-	switch sc {
-	case StatusCodeUnset:
-		return "Unset"
-	case StatusCodeOk:
-		return "Ok"
-	case StatusCodeError:
-		return "Error"
-	default:
-		return fmt.Sprintf("Unknown(%d)", sc)
-	}
-}
-
-// TraceID generates a trace ID for correlation
-// This is a simplified implementation. Real implementation would use:
-//   span := trace.SpanFromContext(ctx)
-//   traceID := span.SpanContext().TraceID().String()
+// TraceID returns the trace ID from the current span in context
 func TraceID(ctx context.Context) string {
-	// Placeholder - would return actual trace ID from context
-	return "placeholder-trace-id"
+	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().HasTraceID() {
+		return span.SpanContext().TraceID().String()
+	}
+	return ""
 }
 
-// SpanID generates a span ID
+// SpanID returns the span ID from the current span in context
 func SpanID(ctx context.Context) string {
-	// Placeholder - would return actual span ID from context
-	return "placeholder-span-id"
+	span := trace.SpanFromContext(ctx)
+	if span.SpanContext().HasSpanID() {
+		return span.SpanContext().SpanID().String()
+	}
+	return ""
 }
 
 // InjectTraceContext injects trace context into headers for propagation
-func InjectTraceContext(ctx context.Context, headers map[string]string) {
-	// Placeholder - would inject W3C Trace Context headers
-	// Real implementation would use:
-	//   propagator := otel.GetTextMapPropagator()
-	//   propagator.Inject(ctx, propagation.MapCarrier(headers))
-	headers["traceparent"] = "00-placeholder-trace-id-placeholder-span-id-01"
+func InjectTraceContext(ctx context.Context, carrier propagation.TextMapCarrier) {
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
 }
 
 // ExtractTraceContext extracts trace context from headers
-func ExtractTraceContext(ctx context.Context, headers map[string]string) context.Context {
-	// Placeholder - would extract W3C Trace Context headers
-	// Real implementation would use:
-	//   propagator := otel.GetTextMapPropagator()
-	//   return propagator.Extract(ctx, propagation.MapCarrier(headers))
-	return ctx
+func ExtractTraceContext(ctx context.Context, carrier propagation.TextMapCarrier) context.Context {
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
+}
+
+// SetSpanAttributes sets multiple attributes on the current span
+func SetSpanAttributes(ctx context.Context, attrs map[string]interface{}) {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+
+	for key, value := range attrs {
+		switch v := value.(type) {
+		case string:
+			span.SetAttributes(attribute.String(key, v))
+		case int:
+			span.SetAttributes(attribute.Int(key, v))
+		case int64:
+			span.SetAttributes(attribute.Int64(key, v))
+		case float64:
+			span.SetAttributes(attribute.Float64(key, v))
+		case bool:
+			span.SetAttributes(attribute.Bool(key, v))
+		default:
+			span.SetAttributes(attribute.String(key, fmt.Sprintf("%v", v)))
+		}
+	}
+}
+
+// RecordError records an error on the current span
+func RecordError(ctx context.Context, err error) {
+	if err == nil {
+		return
+	}
+	span := trace.SpanFromContext(ctx)
+	if span.IsRecording() {
+		span.RecordError(err)
+	}
+}
+
+// AddEvent adds an event to the current span
+func AddEvent(ctx context.Context, name string, attrs map[string]interface{}) {
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+
+	var otelAttrs []attribute.KeyValue
+	for key, value := range attrs {
+		switch v := value.(type) {
+		case string:
+			otelAttrs = append(otelAttrs, attribute.String(key, v))
+		case int:
+			otelAttrs = append(otelAttrs, attribute.Int(key, v))
+		case int64:
+			otelAttrs = append(otelAttrs, attribute.Int64(key, v))
+		case float64:
+			otelAttrs = append(otelAttrs, attribute.Float64(key, v))
+		case bool:
+			otelAttrs = append(otelAttrs, attribute.Bool(key, v))
+		default:
+			otelAttrs = append(otelAttrs, attribute.String(key, fmt.Sprintf("%v", v)))
+		}
+	}
+
+	span.AddEvent(name, trace.WithAttributes(otelAttrs...))
 }
