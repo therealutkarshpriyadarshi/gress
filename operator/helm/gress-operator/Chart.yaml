@@ -1,0 +1,18 @@
+apiVersion: v2
+name: gress-operator
+description: Kubernetes operator for Gress stream processing framework
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - stream-processing
+  - gress
+  - operator
+  - kubernetes
+home: https://github.com/therealutkarshpriyadarshi/gress
+sources:
+  - https://github.com/therealutkarshpriyadarshi/gress
+maintainers:
+  - name: Gress Team
+    email: maintainers@gress.io
+icon: https://raw.githubusercontent.com/therealutkarshpriyadarshi/gress/main/docs/logo.png

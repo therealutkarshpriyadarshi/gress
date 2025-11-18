@@ -1,0 +1,152 @@
+apiVersion: gress.io/v1alpha1
+kind: StreamJob
+metadata:
+  name: kafka-processing-job
+  namespace: default
+spec:
+  # Container image for the stream processing job
+  image: ghcr.io/therealutkarshpriyadarshi/gress:latest
+  imagePullPolicy: IfNotPresent
+
+  # Number of parallel task instances
+  parallelism: 3
+
+  # Restart policy
+  restartPolicy: OnFailure
+
+  # Resource requirements
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+  # State backend configuration
+  stateBackend:
+    type: rocksdb
+    rocksdb:
+      writeBufferSize: 134217728  # 128MB
+      blockCacheSize: 2147483648  # 2GB
+    persistentVolumeClaim:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+      storageClassName: standard
+
+  # Checkpoint configuration
+  checkpoint:
+    interval: "30s"
+    mode: exactly-once
+    timeout: "10m"
+    minPauseBetweenCheckpoints: "5s"
+    maxConcurrentCheckpoints: 1
+    storage:
+      type: filesystem
+      path: /var/lib/gress/checkpoints
+      persistentVolumeClaim:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+        storageClassName: standard
+
+  # Data sources
+  sources:
+    - name: kafka-input
+      type: kafka
+      kafka:
+        brokers:
+          - kafka-broker-0.kafka.svc.cluster.local:9092
+          - kafka-broker-1.kafka.svc.cluster.local:9092
+        topics:
+          - input-events
+        groupID: gress-consumer-group
+        startOffset: latest
+
+  # Data sinks
+  sinks:
+    - name: kafka-output
+      type: kafka
+      kafka:
+        brokers:
+          - kafka-broker-0.kafka.svc.cluster.local:9092
+        topic: processed-events
+
+  # Processing pipeline (operators)
+  pipeline:
+    - name: filter-valid
+      type: filter
+      function: "event.value != null && event.value.status == 'active'"
+
+    - name: extract-key
+      type: keyby
+      keySelector: "event.value.userId"
+
+    - name: enrich-event
+      type: map
+      function: "{ ...event, enrichedAt: Date.now(), version: 'v2' }"
+
+    - name: aggregate-by-user
+      type: window
+      window:
+        type: tumbling
+        size: "5m"
+
+  # Auto-scaling configuration
+  autoScaler:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    metrics:
+      - type: kafka_lag
+        target: "5000"
+      - type: cpu
+        target: "70"
+    behavior:
+      scaleUp:
+        stabilizationWindowSeconds: 60
+        policies:
+          - type: Pods
+            value: 2
+            periodSeconds: 60
+      scaleDown:
+        stabilizationWindowSeconds: 300
+        policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 120
+
+  # Environment variables
+  env:
+    - name: LOG_LEVEL
+      value: "info"
+    - name: METRICS_ENABLED
+      value: "true"
+
+  # Service account
+  serviceAccountName: gress-job-sa
+
+  # Pod scheduling
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: streamjob
+                  operator: In
+                  values:
+                    - kafka-processing-job
+            topologyKey: kubernetes.io/hostname
+
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "stream-processing"
+      effect: "NoSchedule"

@@ -1,0 +1,198 @@
+# Default values for gress-operator
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Operator configuration
+operator:
+  # Number of operator replicas (set to 1 when leader election is enabled)
+  replicaCount: 1
+
+  image:
+    repository: ghcr.io/therealutkarshpriyadarshi/gress-operator
+    pullPolicy: IfNotPresent
+    tag: "0.1.0"
+
+  imagePullSecrets: []
+
+  # Service account for the operator
+  serviceAccount:
+    # Specifies whether a service account should be created
+    create: true
+    # Annotations to add to the service account
+    annotations: {}
+    # The name of the service account to use.
+    # If not set and create is true, a name is generated using the fullname template
+    name: ""
+
+  # RBAC configuration
+  rbac:
+    # Specifies whether RBAC resources should be created
+    create: true
+
+  # Leader election configuration
+  leaderElection:
+    enabled: true
+
+  # Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity
+  affinity: {}
+
+  # Pod annotations
+  podAnnotations: {}
+
+  # Pod security context
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+  # Container security context
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+
+  # Metrics configuration
+  metrics:
+    enabled: true
+    port: 8080
+    # ServiceMonitor for Prometheus Operator
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+      scrapeTimeout: 10s
+      labels: {}
+
+  # Health probe configuration
+  healthProbe:
+    enabled: true
+    port: 8081
+
+  # Webhook configuration (if using webhooks)
+  webhook:
+    enabled: false
+    port: 9443
+
+# CRD configuration
+crds:
+  # Install CRDs
+  install: true
+  # Annotations for CRDs
+  annotations: {}
+
+# Webhook certificates (if webhooks are enabled)
+webhookCertificates:
+  # Use cert-manager to generate certificates
+  certManager:
+    enabled: false
+
+# Global configuration
+global:
+  # Image pull secrets for all pods
+  imagePullSecrets: []
+
+# Default StreamJob configuration
+# These values are used as defaults for StreamJob resources
+streamJobDefaults:
+  # Default image for stream jobs
+  image: ghcr.io/therealutkarshpriyadarshi/gress:latest
+  imagePullPolicy: IfNotPresent
+
+  # Default resources
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+
+  # Default state backend
+  stateBackend:
+    type: rocksdb
+    persistentVolumeClaim:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 10Gi
+
+  # Default checkpoint configuration
+  checkpoint:
+    interval: 30s
+    mode: exactly-once
+    storage:
+      type: filesystem
+      persistentVolumeClaim:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+
+# Default StreamCluster configuration
+streamClusterDefaults:
+  # Default version
+  version: latest
+
+  # Job Manager configuration
+  jobManagers:
+    replicas: 1
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    storage:
+      size: 10Gi
+    serviceType: ClusterIP
+
+  # Task Manager configuration
+  taskManagers:
+    replicas: 2
+    taskSlots: 1
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+    storage:
+      size: 20Gi
+
+  # High availability
+  highAvailability:
+    enabled: false
+    mode: kubernetes
+
+  # Monitoring
+  monitoring:
+    enabled: true
+    port: 9091
+    serviceMonitor:
+      enabled: false
+      interval: 30s
+
+  # Logging
+  logging:
+    level: info
+    format: json
