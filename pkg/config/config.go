@@ -43,6 +43,9 @@ type Config struct {
 
 	// Schema Registry configuration
 	SchemaRegistry SchemaRegistryConfig `yaml:"schema_registry" json:"schema_registry"`
+
+	// Machine Learning configuration
+	ML MLConfig `yaml:"ml" json:"ml"`
 }
 
 // ApplicationConfig holds application-level metadata
@@ -264,6 +267,161 @@ type SinkSchemaConfig struct {
 	ValidateOnWrite bool `yaml:"validate_on_write" json:"validate_on_write"`
 }
 
+// MLConfig holds machine learning configuration
+type MLConfig struct {
+	// Enabled enables ML integration
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// ModelRegistry holds model registry configuration
+	ModelRegistry ModelRegistryConfig `yaml:"model_registry" json:"model_registry"`
+
+	// Models holds model configurations
+	Models []ModelConfig `yaml:"models" json:"models"`
+
+	// FeatureStore holds feature store configuration
+	FeatureStore FeatureStoreConfig `yaml:"feature_store" json:"feature_store"`
+
+	// Inference holds inference configuration
+	Inference InferenceConfigSettings `yaml:"inference" json:"inference"`
+
+	// OnlineLearning holds online learning configuration
+	OnlineLearning OnlineLearningConfigSettings `yaml:"online_learning" json:"online_learning"`
+
+	// ABTesting holds A/B testing configuration
+	ABTesting ABTestingConfig `yaml:"ab_testing" json:"ab_testing"`
+}
+
+// ModelRegistryConfig holds model registry configuration
+type ModelRegistryConfig struct {
+	// Type of model registry (local, remote, s3, gcs)
+	Type string `yaml:"type" json:"type"`
+
+	// BasePath is the base path for local model storage
+	BasePath string `yaml:"base_path" json:"base_path"`
+
+	// S3 configuration
+	S3Bucket    string `yaml:"s3_bucket" json:"s3_bucket"`
+	S3Region    string `yaml:"s3_region" json:"s3_region"`
+	S3Endpoint  string `yaml:"s3_endpoint" json:"s3_endpoint"`
+	S3AccessKey string `yaml:"s3_access_key" json:"s3_access_key"`
+	S3SecretKey string `yaml:"s3_secret_key" json:"s3_secret_key"`
+
+	// GCS configuration
+	GCSBucket      string `yaml:"gcs_bucket" json:"gcs_bucket"`
+	GCSProject     string `yaml:"gcs_project" json:"gcs_project"`
+	GCSCredentials string `yaml:"gcs_credentials" json:"gcs_credentials"`
+}
+
+// ModelConfig holds model configuration
+type ModelConfig struct {
+	Name           string            `yaml:"name" json:"name"`
+	Version        string            `yaml:"version" json:"version"`
+	Type           string            `yaml:"type" json:"type"` // onnx, tensorflow, sklearn
+	Path           string            `yaml:"path" json:"path"`
+	Tags           map[string]string `yaml:"tags" json:"tags"`
+	Description    string            `yaml:"description" json:"description"`
+	Enabled        bool              `yaml:"enabled" json:"enabled"`
+	WarmupOnLoad   bool              `yaml:"warmup_on_load" json:"warmup_on_load"`
+}
+
+// FeatureStoreConfig holds feature store configuration
+type FeatureStoreConfig struct {
+	// Enabled enables feature store
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// Backend type (state, redis, dynamodb)
+	Backend string `yaml:"backend" json:"backend"`
+
+	// TTL for cached features
+	TTL time.Duration `yaml:"ttl" json:"ttl"`
+
+	// Redis configuration
+	RedisAddr     string `yaml:"redis_addr" json:"redis_addr"`
+	RedisPassword string `yaml:"redis_password" json:"redis_password"`
+	RedisDB       int    `yaml:"redis_db" json:"redis_db"`
+
+	// DynamoDB configuration
+	DynamoDBTable  string `yaml:"dynamodb_table" json:"dynamodb_table"`
+	DynamoDBRegion string `yaml:"dynamodb_region" json:"dynamodb_region"`
+}
+
+// InferenceConfigSettings holds inference configuration
+type InferenceConfigSettings struct {
+	// Default batch size for inference
+	DefaultBatchSize int `yaml:"default_batch_size" json:"default_batch_size"`
+
+	// Default batch timeout
+	DefaultBatchTimeout time.Duration `yaml:"default_batch_timeout" json:"default_batch_timeout"`
+
+	// Max concurrency for inference
+	MaxConcurrency int `yaml:"max_concurrency" json:"max_concurrency"`
+
+	// Max latency threshold
+	MaxLatency time.Duration `yaml:"max_latency" json:"max_latency"`
+
+	// Enable GPU support
+	EnableGPU bool `yaml:"enable_gpu" json:"enable_gpu"`
+
+	// GPU device IDs
+	GPUDeviceIDs []int `yaml:"gpu_device_ids" json:"gpu_device_ids"`
+}
+
+// OnlineLearningConfigSettings holds online learning configuration
+type OnlineLearningConfigSettings struct {
+	// Enabled enables online learning
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// Default update batch size
+	DefaultUpdateBatchSize int `yaml:"default_update_batch_size" json:"default_update_batch_size"`
+
+	// Default update interval
+	DefaultUpdateInterval time.Duration `yaml:"default_update_interval" json:"default_update_interval"`
+
+	// Default checkpoint interval
+	DefaultCheckpointInterval time.Duration `yaml:"default_checkpoint_interval" json:"default_checkpoint_interval"`
+
+	// Checkpoint directory
+	CheckpointDir string `yaml:"checkpoint_dir" json:"checkpoint_dir"`
+
+	// Default learning rate
+	DefaultLearningRate float64 `yaml:"default_learning_rate" json:"default_learning_rate"`
+
+	// Enable validation
+	EnableValidation bool `yaml:"enable_validation" json:"enable_validation"`
+
+	// Validation split
+	ValidationSplit float64 `yaml:"validation_split" json:"validation_split"`
+}
+
+// ABTestingConfig holds A/B testing configuration
+type ABTestingConfig struct {
+	// Enabled enables A/B testing
+	Enabled bool `yaml:"enabled" json:"enabled"`
+
+	// Experiments holds experiment configurations
+	Experiments []ExperimentConfig `yaml:"experiments" json:"experiments"`
+}
+
+// ExperimentConfig holds experiment configuration
+type ExperimentConfig struct {
+	Name              string                   `yaml:"name" json:"name"`
+	Strategy          string                   `yaml:"strategy" json:"strategy"` // random, hash, percentage, user_id
+	Variants          []VariantConfig          `yaml:"variants" json:"variants"`
+	SplitKey          string                   `yaml:"split_key" json:"split_key"`
+	DefaultVariant    string                   `yaml:"default_variant" json:"default_variant"`
+	EnableShadowMode  bool                     `yaml:"enable_shadow_mode" json:"enable_shadow_mode"`
+	CollectComparison bool                     `yaml:"collect_comparison" json:"collect_comparison"`
+	Enabled           bool                     `yaml:"enabled" json:"enabled"`
+}
+
+// VariantConfig holds variant configuration
+type VariantConfig struct {
+	Name         string  `yaml:"name" json:"name"`
+	ModelName    string  `yaml:"model_name" json:"model_name"`
+	ModelVersion string  `yaml:"model_version" json:"model_version"`
+	Weight       float64 `yaml:"weight" json:"weight"`
+	Enabled      bool    `yaml:"enabled" json:"enabled"`
+}
 
 // DefaultConfig returns a default configuration
 func DefaultConfig() *Config {
@@ -348,6 +506,41 @@ func DefaultConfig() *Config {
 			CacheTTL:     5 * time.Minute,
 			TLSEnabled:   false,
 			TLSSkipVerify: false,
+		},
+		ML: MLConfig{
+			Enabled: false,
+			ModelRegistry: ModelRegistryConfig{
+				Type:     "local",
+				BasePath: "./models",
+			},
+			Models: []ModelConfig{},
+			FeatureStore: FeatureStoreConfig{
+				Enabled: false,
+				Backend: "state",
+				TTL:     5 * time.Minute,
+			},
+			Inference: InferenceConfigSettings{
+				DefaultBatchSize:    10,
+				DefaultBatchTimeout: 10 * time.Millisecond,
+				MaxConcurrency:      10,
+				MaxLatency:          100 * time.Millisecond,
+				EnableGPU:           false,
+				GPUDeviceIDs:        []int{},
+			},
+			OnlineLearning: OnlineLearningConfigSettings{
+				Enabled:                   false,
+				DefaultUpdateBatchSize:    32,
+				DefaultUpdateInterval:     5 * time.Second,
+				DefaultCheckpointInterval: 5 * time.Minute,
+				CheckpointDir:             "./ml-checkpoints",
+				DefaultLearningRate:       0.001,
+				EnableValidation:          true,
+				ValidationSplit:           0.2,
+			},
+			ABTesting: ABTestingConfig{
+				Enabled:     false,
+				Experiments: []ExperimentConfig{},
+			},
 		},
 	}
 }
