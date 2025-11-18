@@ -46,6 +46,9 @@ type Collector struct {
 	WindowLateFired       *prometheus.CounterVec
 	WindowSize            *prometheus.GaugeVec
 
+	// Error handling metrics
+	ErrorMetrics *ErrorMetrics
+
 	// Custom metrics registry for user applications
 	customMetrics map[string]prometheus.Collector
 	customMu      sync.RWMutex
@@ -66,6 +69,9 @@ func NewCollector(logger *zap.Logger) *Collector {
 
 	c.initMetrics()
 	c.registerMetrics()
+
+	// Initialize error metrics
+	c.ErrorMetrics = NewErrorMetrics(registry)
 
 	return c
 }
