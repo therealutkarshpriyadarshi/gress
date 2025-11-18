@@ -131,6 +131,14 @@ Open Grafana at http://localhost:3000 to see real-time metrics and pricing updat
   - Session: Gap-based dynamic windows
   - Custom triggers: Event-time, processing-time, count-based
 
+- **Stream Joins**
+  - Inner/Outer Joins: Match events from multiple streams
+  - Window-based Joins: Join within time windows
+  - Interval Joins: Join with time tolerance
+  - Temporal Joins: Join with versioned reference data
+  - Multiple strategies: Hash join, Sort-merge, Nested loop
+  - State management: Automatic cleanup and TTL
+
 ### Fault Tolerance
 
 - **Exactly-Once Processing**
