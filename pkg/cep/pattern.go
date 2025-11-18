@@ -1,12 +1,9 @@
 package cep
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/therealutkarshpriyadarshi/gress/pkg/stream"
 )
 
 // Pattern represents a Complex Event Processing pattern
@@ -21,10 +18,15 @@ type Pattern struct {
 
 // EventPattern defines a pattern to match against events
 type EventPattern struct {
-	Name       string                 `json:"name"`
-	Type       string                 `json:"type"`
-	Predicates map[string]interface{} `json:"predicates"`
-	Optional   bool                   `json:"optional"`
+	Name               string              `json:"name"`
+	Type               string              `json:"type"`
+	Predicates         map[string]interface{} `json:"predicates"`
+	Optional           bool                `json:"optional"`
+	Negated            bool                `json:"negated"`             // True if this event should NOT occur
+	Quantifier         Quantifier          `json:"quantifier"`          // Quantifier type (from dsl.go)
+	MinOccurrences     int                 `json:"min_occurrences"`     // Minimum occurrences for quantified patterns
+	MaxOccurrences     int                 `json:"max_occurrences"`     // Maximum occurrences for quantified patterns
+	TemporalConstraint *TemporalConstraint `json:"temporal_constraint"` // Temporal constraint relative to previous event
 }
 
 // Condition represents a condition between events in a pattern
@@ -324,46 +326,6 @@ func (pm *PatternMatcher) extractMetadata(events []map[string]interface{}) map[s
 	return metadata
 }
 
-// PatternDetector creates a stream operator for pattern detection
-func PatternDetector(pattern Pattern, maxBufferSize int) stream.Operator {
-	matcher := NewPatternMatcher(pattern, maxBufferSize)
-
-	return stream.MapOperator(func(event *stream.Event) (*stream.Event, error) {
-		var eventData map[string]interface{}
-		if err := json.Unmarshal(event.Data, &eventData); err != nil {
-			return nil, fmt.Errorf("failed to parse event data: %w", err)
-		}
-
-		// Add timestamp if not present
-		if _, exists := eventData["timestamp"]; !exists {
-			eventData["timestamp"] = event.Timestamp
-		}
-
-		// Check for pattern matches
-		matches := matcher.AddEvent(eventData)
-
-		// If patterns matched, emit them
-		if len(matches) > 0 {
-			for _, match := range matches {
-				matchData, err := json.Marshal(match)
-				if err != nil {
-					return nil, fmt.Errorf("failed to marshal pattern match: %w", err)
-				}
-
-				return &stream.Event{
-					Key:       []byte(match.PatternID),
-					Data:      matchData,
-					Timestamp: match.LastEventTime,
-					Headers:   event.Headers,
-					Partition: event.Partition,
-					Offset:    event.Offset,
-				}, nil
-			}
-		}
-
-		return nil, nil // No match found
-	})
-}
 
 // SequencePattern creates a pattern for sequential event detection
 func SequencePattern(id, name string, eventTypes []string, window time.Duration) Pattern {
